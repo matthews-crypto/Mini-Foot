@@ -1,12 +1,22 @@
 package auth
 
 import (
+	"errors"
+	"log"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 )
 
-var jwtKey = []byte("votre_clé_secrète_ici") // À remplacer par une vraie clé secrète
+var jwtKey []byte
+
+func InitJWTKey(key string) {
+	if key == "" {
+		log.Fatal("La clé JWT fournie est vide")
+	}
+	jwtKey = []byte(key)
+	log.Println("Clé JWT initialisée avec succès")
+}
 
 type Claims struct {
 	UserID string `json:"user_id"`
@@ -23,12 +33,20 @@ func GenerateToken(userID string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
 }
 
 func ValidateToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("méthode de signature inattendue")
+		}
 		return jwtKey, nil
 	})
 
@@ -37,7 +55,7 @@ func ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, jwt.ErrSignatureInvalid
+		return nil, errors.New("token invalide")
 	}
 
 	return claims, nil

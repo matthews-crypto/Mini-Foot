@@ -16,15 +16,22 @@ import (
 
 	"github.com/matthews-crypto/Mini-Foot/api/handlers"
 	"github.com/matthews-crypto/Mini-Foot/internal/user"
+	"github.com/matthews-crypto/Mini-Foot/pkg/auth"
 	"github.com/matthews-crypto/Mini-Foot/pkg/middleware"
 )
 
 func main() {
 	// Charger les variables d'environnement
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Erreur lors du chargement du fichier .env")
+	if err := godotenv.Load(); err != nil {
+		log.Println("Avertissement: Fichier .env non trouvé. Utilisation des variables d'environnement système.")
 	}
+
+	// Vérifier et initialiser la clé JWT
+	jwtKey := os.Getenv("JWT_SECRET_KEY")
+	if jwtKey == "" {
+		log.Fatal("La variable d'environnement JWT_SECRET_KEY n'est pas définie")
+	}
+	auth.InitJWTKey(jwtKey)
 
 	// Connexion à MongoDB
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(os.Getenv("MONGODB_URI")))
@@ -34,11 +41,9 @@ func main() {
 	defer client.Disconnect(context.TODO())
 
 	// Vérifier la connexion
-	err = client.Ping(context.TODO(), nil)
-	if err != nil {
+	if err := client.Ping(context.TODO(), nil); err != nil {
 		log.Fatal(err)
 	}
-
 	log.Println("Connecté à MongoDB!")
 
 	// Initialiser les dépendances
@@ -82,9 +87,8 @@ func serveTemplate(tmpl string) http.HandlerFunc {
 			filepath.Join("web", "templates", tmpl),
 		}
 
-		// Créer un map pour passer des données au template
 		data := map[string]interface{}{
-			"Title": strings.TrimSuffix(tmpl, ".html"), // Utilise le nom du fichier comme titre
+			"Title": strings.TrimSuffix(tmpl, ".html"),
 		}
 
 		ts, err := template.ParseFiles(files...)
@@ -94,8 +98,7 @@ func serveTemplate(tmpl string) http.HandlerFunc {
 			return
 		}
 
-		err = ts.ExecuteTemplate(w, "layout", data)
-		if err != nil {
+		if err := ts.ExecuteTemplate(w, "layout", data); err != nil {
 			log.Printf("Erreur lors de l'exécution du template %s : %v", tmpl, err)
 			http.Error(w, "Erreur interne du serveur", http.StatusInternalServerError)
 		}
